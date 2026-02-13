@@ -49,7 +49,7 @@ def round_dict_values(d: dict[str, float], ndigits: int = 1) -> dict[str, float]
 @st.cache_data
 def build_scores() -> pd.DataFrame:
     b = load_bwar("bWAR.txt")
-    f = load_fwar("fWAR2.txt")
+    f = load_fwar("fwar2.txt")
     combined = add_dicts(b, f)
     combined = round_dict_values(combined, 1)
 
