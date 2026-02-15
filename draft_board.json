@@ -1,0 +1,130 @@
+{
+  "teams": [
+    {
+      "name": "Team 1",
+      "starters": [
+        "Player 1",
+        "Player 18",
+        "Player 19",
+        "Player 36",
+        "Player 37"
+      ],
+      "reserves": [
+        "Player 54",
+        "Player 55"
+      ]
+    },
+    {
+      "name": "Team 2",
+      "starters": [
+        "Player 2",
+        "Player 17",
+        "Player 20",
+        "Player 35",
+        "Player 38"
+      ],
+      "reserves": [
+        "Player 53",
+        "Player 56"
+      ]
+    },
+    {
+      "name": "Team 3",
+      "starters": [
+        "Player 3",
+        "Player 16",
+        "Player 21",
+        "Player 34",
+        "Player 39"
+      ],
+      "reserves": [
+        "Player 52",
+        "Player 57"
+      ]
+    },
+    {
+      "name": "Team 4",
+      "starters": [
+        "Player 4",
+        "Player 15",
+        "Player 22",
+        "Player 33",
+        "Player 40"
+      ],
+      "reserves": [
+        "Player 51",
+        "Player 58"
+      ]
+    },
+    {
+      "name": "Team 5",
+      "starters": [
+        "Player 5",
+        "Player 14",
+        "Player 23",
+        "Player 32",
+        "Player 41"
+      ],
+      "reserves": [
+        "Player 50",
+        "Player 59"
+      ]
+    },
+    {
+      "name": "Team 6",
+      "starters": [
+        "Player 6",
+        "Player 13",
+        "Player 24",
+        "Player 31",
+        "Player 42"
+      ],
+      "reserves": [
+        "Player 49",
+        "Player 60"
+      ]
+    },
+    {
+      "name": "Team 7",
+      "starters": [
+        "Player 7",
+        "Player 12",
+        "Player 25",
+        "Player 30",
+        "Player 43"
+      ],
+      "reserves": [
+        "Player 48",
+        "Player 61"
+      ]
+    },
+    {
+      "name": "Team 8",
+      "starters": [
+        "Player 8",
+        "Player 11",
+        "Player 26",
+        "Player 29",
+        "Player 44"
+      ],
+      "reserves": [
+        "Player 47",
+        "Player 62"
+      ]
+    },
+    {
+      "name": "Team 9",
+      "starters": [
+        "Player 9",
+        "Player 10",
+        "Player 27",
+        "Player 28",
+        "Player 45"
+      ],
+      "reserves": [
+        "Player 46",
+        "Player 63"
+      ]
+    }
+  ]
+}
