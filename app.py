@@ -60,24 +60,198 @@ def build_scores() -> pd.DataFrame:
     return df
 
 
+TEAMS: dict[str, dict[str, object]] = {
+    "Team 1": {
+        "owner": "Spence",
+        "starters": [
+            "Bobby Witt Jr.",
+            "Garrett Crochet",
+            "Ronald Acuña Jr.",
+            "Roman Anthony",
+            "Jeremy Peña",
+        ],
+        "reserves": ["Ceddane Rafaela", "James Wood"],
+    },
+    "Team 2": {
+        "owner": "Mav",
+        "starters": [
+            "Shohei Ohtani",
+            "Yoshinobu Yamamoto",
+            "Wyatt Langford",
+            "Jesus Luzardo",
+            "Shea Langeliers",
+        ],
+        "reserves": ["Bryan Woo", "Willy Adames"],
+    },
+    "Team 3": {
+        "owner": "Kev",
+        "starters": [
+            "Paul Skenes",
+            "Christopher Sanchez",
+            "Geraldo Perdomo",
+            "Matt Olson",
+            "Nico Hoerner",
+        ],
+        "reserves": ["Zack Neto", "Jackson Merrill"],
+    },
+    "Team 4": {
+        "owner": "Ben",
+        "starters": [
+            "Cal Raleigh",
+            "José Ramírez",
+            "Mooken Betts",
+            "Logan Webb",
+            "Kyle Schwarber",
+        ],
+        "reserves": ["Hunter Greene", "Colson Montgomery"],
+    },
+    "Team 5": {
+        "owner": "Aaron",
+        "starters": [
+            "Juan Soto",
+            "Nick Kurtz",
+            "Corbin Carroll",
+            "Max Fried",
+            "Brice Turang",
+        ],
+        "reserves": ["Will Smith", "Kazuma Okamoto"],
+    },
+    "Team 6": {
+        "owner": "Nolan",
+        "starters": [
+            "Aaron Judge",
+            "Kyle Tucker",
+            "Francisco Lindor",
+            "Maikel Garcia",
+            "Trea Turner",
+        ],
+        "reserves": ["Nolan McLean", "Chris Sale"],
+    },
+    "Team 7": {
+        "owner": "Emilio",
+        "starters": [
+            "Gunnar Henderson",
+            "Corey Seager",
+            "Yordan Alvarez",
+            "Elly De La Cruz",
+            "Adley Rutschman",
+        ],
+        "reserves": ["Austin Riley", "Cole Ragans"],
+    },
+    "Team 8": {
+        "owner": "Gabe",
+        "starters": [
+            "Julio Rodríguez",
+            "Vladimir Guerrero Jr.",
+            "Ketel Marte",
+            "Matt Chapman",
+            "Byron Buxton",
+        ],
+        "reserves": ["Freddie Peralta", "Mike Trout"],
+    },
+    "Team 9": {
+        "owner": "Bailey",
+        "starters": [
+            "Fernando Tatis Jr.",
+            "Tarik Skubal",
+            "Junior Caminero",
+            "Pete Crow-Armstrong",
+            "Jazz Chisholm Jr.",
+        ],
+        "reserves": ["William Contreras", "Dalton Varsho"],
+    },
+}
+
+
+def player_war_map(df: pd.DataFrame) -> dict[str, float]:
+    return df.set_index("Player")["WAR"].to_dict()
+
+
+def lookup_player_war(name: str, war_map: dict[str, float]) -> float:
+    return round(war_map.get(name, 0.0), 1)
+
+
+def team_player_rows(player_names: list[str], war_map: dict[str, float]) -> list[dict[str, object]]:
+    return [
+        {"Player": name, "WAR": lookup_player_war(name, war_map)}
+        for name in player_names
+    ]
+
+
+def team_summary(team_name: str, team_data: dict[str, object], war_map: dict[str, float]) -> dict[str, object]:
+    starter_rows = team_player_rows(team_data["starters"], war_map)
+    reserve_rows = team_player_rows(team_data["reserves"], war_map)
+    starter_total = sum(row["WAR"] for row in starter_rows)
+    reserve_total = sum(row["WAR"] for row in reserve_rows)
+    return {
+        "Team": team_name,
+        "Owner": team_data["owner"],
+        "Starter WAR": round(starter_total, 1),
+        "Reserve WAR": round(reserve_total, 1),
+        "Total WAR": round(starter_total + reserve_total, 1),
+        "Starter Rows": starter_rows,
+        "Reserve Rows": reserve_rows,
+    }
+
+
+def build_team_summary_df(war_map: dict[str, float]) -> pd.DataFrame:
+    rows = [
+        {
+            "Team": summary["Team"],
+            "Owner": summary["Owner"],
+            "Starter WAR": summary["Starter WAR"],
+            "Reserve WAR": summary["Reserve WAR"],
+            "Total WAR": summary["Total WAR"],
+        }
+        for team_name, team_data in TEAMS.items()
+        for summary in [team_summary(team_name, team_data, war_map)]
+    ]
+    return pd.DataFrame(rows).sort_values("Total WAR", ascending=False, ignore_index=True)
+
+
+def render_team(team_name: str, team_data: dict[str, object], war_map: dict[str, float]) -> None:
+    summary = team_summary(team_name, team_data, war_map)
+    st.markdown(f"### {team_name}: {summary['Owner']}")
+    st.write("**Starter roster**")
+    st.dataframe(pd.DataFrame(summary["Starter Rows"]), use_container_width=True)
+    st.write("**Reserve roster**")
+    st.dataframe(pd.DataFrame(summary["Reserve Rows"]), use_container_width=True)
+    st.markdown(
+        f"**Starter WAR:** {summary['Starter WAR']}   |   **Reserve WAR:** {summary['Reserve WAR']}   |   **Total WAR:** {summary['Total WAR']}"
+    )
+
+
 st.set_page_config(page_title="WAR League Scorebook", layout="wide")
 st.title("WAR League Scorebook")
 
-df = build_scores()
+scores_df = build_scores()
+war_map = player_war_map(scores_df)
 
-query = st.text_input("Search player (partial match):", value="")
-if query.strip():
-    mask = df["Player"].str.contains(query, case=False, na=False)
-    results = df[mask]
-    st.subheader(f"Matches for: {query}")
-    st.dataframe(results, use_container_width=True)
-else:
-    st.subheader("Leaderboard")
-    st.dataframe(df, use_container_width=True)
+team_tab, leaderboard_tab = st.tabs(["Fantasy Teams", "Leaderboard"])
 
-st.download_button(
-    "Download CSV",
-    data=df.to_csv(index=False).encode("utf-8"),
-    file_name="morescore.csv",
-    mime="text/csv",
-)
+with team_tab:
+    st.subheader("Fantasy team standings")
+    summary_df = build_team_summary_df(war_map)
+    st.dataframe(summary_df, use_container_width=True)
+    st.markdown("---")
+    for team_name, team_data in TEAMS.items():
+        with st.expander(f"{team_name}: {team_data['owner']}", expanded=False):
+            render_team(team_name, team_data, war_map)
+
+with leaderboard_tab:
+    query = st.text_input("Search player (partial match):", value="", key="leaderboard_query")
+    if query.strip():
+        mask = scores_df["Player"].str.contains(query, case=False, na=False)
+        results = scores_df[mask]
+        st.subheader(f"Matches for: {query}")
+        st.dataframe(results, use_container_width=True)
+    else:
+        st.subheader("Leaderboard")
+        st.dataframe(scores_df, use_container_width=True)
+
+    st.download_button(
+        "Download CSV",
+        data=scores_df.to_csv(index=False).encode("utf-8"),
+        file_name="morescore.csv",
+        mime="text/csv",
+    )
