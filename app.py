@@ -70,7 +70,7 @@ TEAMS: dict[str, dict[str, object]] = {
             "Roman Anthony",
             "Jeremy Peña",
         ],
-        "reserves": ["Ceddane Rafaela", "James Wood"],
+        "reserves": ["Ceddanne Rafaela", "James Wood"],
     },
     "Team 2": {
         "owner": "Mav",
@@ -78,7 +78,7 @@ TEAMS: dict[str, dict[str, object]] = {
             "Shohei Ohtani",
             "Yoshinobu Yamamoto",
             "Wyatt Langford",
-            "Jesus Luzardo",
+            "Jesús Luzardo",
             "Shea Langeliers",
         ],
         "reserves": ["Bryan Woo", "Willy Adames"],
@@ -87,19 +87,19 @@ TEAMS: dict[str, dict[str, object]] = {
         "owner": "Kev",
         "starters": [
             "Paul Skenes",
-            "Christopher Sanchez",
+            "Cristopher Sánchez",
             "Geraldo Perdomo",
             "Matt Olson",
             "Nico Hoerner",
         ],
-        "reserves": ["Zack Neto", "Jackson Merrill"],
+        "reserves": ["Zach Neto", "Jackson Merrill"],
     },
     "Team 4": {
         "owner": "Ben",
         "starters": [
             "Cal Raleigh",
             "José Ramírez",
-            "Mooken Betts",
+            "Mookie Betts",
             "Logan Webb",
             "Kyle Schwarber",
         ],
@@ -147,7 +147,7 @@ TEAMS: dict[str, dict[str, object]] = {
             "Matt Chapman",
             "Byron Buxton",
         ],
-        "reserves": ["Freddie Peralta", "Mike Trout"],
+        "reserves": ["Freddy Peralta", "Mike Trout"],
     },
     "Team 9": {
         "owner": "Bailey",
@@ -158,7 +158,7 @@ TEAMS: dict[str, dict[str, object]] = {
             "Pete Crow-Armstrong",
             "Jazz Chisholm Jr.",
         ],
-        "reserves": ["William Contreras", "Dalton Varsho"],
+        "reserves": ["William Contreras", "Daulton Varsho"],
     },
 }
 
