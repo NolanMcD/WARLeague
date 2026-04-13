@@ -208,12 +208,14 @@ def build_team_summary_df(war_map: dict[str, float]) -> pd.DataFrame:
         for team_name, team_data in TEAMS.items()
         for summary in [team_summary(team_name, team_data, war_map)]
     ]
-    return pd.DataFrame(rows).sort_values("Total WAR", ascending=False, ignore_index=True)
+    df = pd.DataFrame(rows).sort_values("Starter WAR", ascending=False, ignore_index=True)
+    df.index = df.index + 1
+    return df
 
 
 def render_team(team_name: str, team_data: dict[str, object], war_map: dict[str, float]) -> None:
     summary = team_summary(team_name, team_data, war_map)
-    st.markdown(f"### {team_name}: {summary['Owner']}")
+    st.markdown(f"### {summary['Owner']}")
     st.write("**Starter roster**")
     st.dataframe(pd.DataFrame(summary["Starter Rows"]), use_container_width=True)
     st.write("**Reserve roster**")
