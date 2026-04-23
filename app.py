@@ -63,7 +63,7 @@ def build_scores() -> pd.DataFrame:
 
 
 TEAMS: dict[str, dict[str, object]] = {
-    "Team 1": {
+    "Spence": {
         "owner": "Spence",
         "starters": [
             "Bobby Witt Jr.",
@@ -74,7 +74,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Wilyer Abreu", "James Wood"],
     },
-    "Team 2": {
+    "Mav": {
         "owner": "Mav",
         "starters": [
             "Shohei Ohtani",
@@ -85,7 +85,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Bryan Woo", "Willy Adames"],
     },
-    "Team 3": {
+    "Kev": {
         "owner": "Kev",
         "starters": [
             "Paul Skenes",
@@ -96,7 +96,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Zach Neto", "Jackson Merrill"],
     },
-    "Team 4": {
+    "Ben": {
         "owner": "Ben",
         "starters": [
             "Cal Raleigh",
@@ -107,7 +107,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Hunter Greene", "Colson Montgomery"],
     },
-    "Team 5": {
+    "Aaron": {
         "owner": "Aaron",
         "starters": [
             "Juan Soto",
@@ -118,7 +118,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Will Smith", "Kazuma Okamoto"],
     },
-    "Team 6": {
+    "Nolan": {
         "owner": "Nolan",
         "starters": [
             "Aaron Judge",
@@ -129,7 +129,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Nolan McLean", "Chris Sale"],
     },
-    "Team 7": {
+    "Emilio": {
         "owner": "Emilio",
         "starters": [
             "Gunnar Henderson",
@@ -140,7 +140,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Austin Riley", "Cole Ragans"],
     },
-    "Team 8": {
+    "Gabe": {
         "owner": "Gabe",
         "starters": [
             "Julio Rodríguez",
@@ -151,7 +151,7 @@ TEAMS: dict[str, dict[str, object]] = {
         ],
         "reserves": ["Freddy Peralta", "Mike Trout"],
     },
-    "Team 9": {
+    "Bailey": {
         "owner": "Bailey",
         "starters": [
             "Fernando Tatis Jr.",
@@ -187,7 +187,6 @@ def team_summary(team_name: str, team_data: dict[str, object], war_map: dict[str
     reserve_total = sum(row["WAR"] for row in reserve_rows)
     return {
         "Team": team_name,
-        "Owner": team_data["owner"],
         "Starter WAR": round(starter_total, 1),
         "Reserve WAR": round(reserve_total, 1),
         "Total WAR": round(starter_total + reserve_total, 1),
@@ -200,7 +199,6 @@ def build_team_summary_df(war_map: dict[str, float]) -> pd.DataFrame:
     rows = [
         {
             "Team": summary["Team"],
-            "Owner": summary["Owner"],
             "Starter WAR": summary["Starter WAR"],
             "Reserve WAR": summary["Reserve WAR"],
             "Total WAR": summary["Total WAR"],
@@ -215,7 +213,7 @@ def build_team_summary_df(war_map: dict[str, float]) -> pd.DataFrame:
 
 def render_team(team_name: str, team_data: dict[str, object], war_map: dict[str, float]) -> None:
     summary = team_summary(team_name, team_data, war_map)
-    st.markdown(f"### {summary['Owner']}")
+    st.markdown(f"### {summary['Team']}")
     st.write("**Starter roster**")
     st.dataframe(pd.DataFrame(summary["Starter Rows"]), use_container_width=True)
     st.write("**Reserve roster**")
@@ -229,15 +227,15 @@ def load_transactions() -> pd.DataFrame:
     transactions_file = "transactions.csv"
     if os.path.exists(transactions_file):
         return pd.read_csv(transactions_file)
-    return pd.DataFrame(columns=["Date", "Team 1", "Team 2", "Description", "WAR Adjustment"])
+    return pd.DataFrame(columns=["Date", "Owner 1", "Owner 2", "Description", "WAR Adjustment"])
 
 
-def save_transaction(date: str, team1: str, team2: str, description: str, war_adjustment: float) -> None:
+def save_transaction(date: str, owner1: str, owner2: str, description: str, war_adjustment: float) -> None:
     transactions_file = "transactions.csv"
     new_transaction = pd.DataFrame([{
         "Date": date,
-        "Team 1": team1,
-        "Team 2": team2,
+        "Owner 1": owner1,
+        "Owner 2": owner2,
         "Description": description,
         "WAR Adjustment": war_adjustment,
     }])
@@ -265,7 +263,7 @@ with team_tab:
     st.dataframe(summary_df, use_container_width=True)
     st.markdown("---")
     for team_name, team_data in TEAMS.items():
-        with st.expander(f"{team_name}: {team_data['owner']}", expanded=False):
+        with st.expander(f"{team_name}", expanded=False):
             render_team(team_name, team_data, war_map)
 
 with leaderboard_tab:
@@ -295,8 +293,8 @@ with transactions_tab:
         with st.form("transaction_form"):
             transaction_date = st.date_input("Date", value=datetime.now().date())
             team_options = list(TEAMS.keys())
-            team1 = st.selectbox("Team 1", team_options, key="team1_select")
-            team2 = st.selectbox("Team 2", team_options, index=1, key="team2_select")
+            owner1 = st.selectbox("Owner 1", team_options, key="owner1_select")
+            owner2 = st.selectbox("Owner 2", team_options, index=1, key="owner2_select")
             description = st.text_input("Description", placeholder="e.g., Trade, Waiver claim, etc.")
             war_adjustment = st.number_input("WAR Adjustment", value=0.0, step=0.1, help="Positive or negative WAR change")
             
@@ -304,8 +302,8 @@ with transactions_tab:
                 if description.strip():
                     save_transaction(
                         str(transaction_date),
-                        team1,
-                        team2,
+                        owner1,
+                        owner2,
                         description,
                         war_adjustment
                     )
