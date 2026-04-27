@@ -230,25 +230,6 @@ def load_transactions() -> pd.DataFrame:
     return pd.DataFrame(columns=["Date", "Owner 1", "Owner 2", "Description", "WAR Adjustment"])
 
 
-def save_transaction(date: str, owner1: str, owner2: str, description: str, war_adjustment: float) -> None:
-    transactions_file = "transactions.csv"
-    new_transaction = pd.DataFrame([{
-        "Date": date,
-        "Owner 1": owner1,
-        "Owner 2": owner2,
-        "Description": description,
-        "WAR Adjustment": war_adjustment,
-    }])
-    
-    if os.path.exists(transactions_file):
-        existing_df = pd.read_csv(transactions_file)
-        combined_df = pd.concat([existing_df, new_transaction], ignore_index=True)
-    else:
-        combined_df = new_transaction
-    
-    combined_df.to_csv(transactions_file, index=False)
-
-
 st.set_page_config(page_title="WAR League Scorebook", layout="wide")
 st.title("WAR League Scorebook")
 
@@ -286,44 +267,18 @@ with leaderboard_tab:
 
 with transactions_tab:
     st.subheader("Transaction Log")
+    st.info("Transactions are managed via the transactions.csv file. Update the CSV to add new transactions.")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Add New Transaction**")
-        with st.form("transaction_form"):
-            transaction_date = st.date_input("Date", value=datetime.now().date())
-            team_options = list(TEAMS.keys())
-            owner1 = st.selectbox("Owner 1", team_options, key="owner1_select")
-            owner2 = st.selectbox("Owner 2", team_options, index=1, key="owner2_select")
-            description = st.text_input("Description", placeholder="e.g., Trade, Waiver claim, etc.")
-            war_adjustment = st.number_input("WAR Adjustment", value=0.0, step=0.1, help="Positive or negative WAR change")
-            
-            if st.form_submit_button("Log Transaction"):
-                if description.strip():
-                    save_transaction(
-                        str(transaction_date),
-                        owner1,
-                        owner2,
-                        description,
-                        war_adjustment
-                    )
-                    st.success("Transaction logged!")
-                    st.rerun()
-                else:
-                    st.error("Please enter a description")
-    
-    with col2:
-        st.write("**Transaction History**")
-        transactions_df = load_transactions()
-        if not transactions_df.empty:
-            st.dataframe(transactions_df, use_container_width=True)
-            
-            csv = transactions_df.to_csv(index=False)
-            st.download_button(
-                "Download Transaction Log",
-                data=csv.encode("utf-8"),
-                file_name="transactions.csv",
-                mime="text/csv",
-            )
-        else:
-            st.info("No transactions logged yet")
+    transactions_df = load_transactions()
+    if not transactions_df.empty:
+        st.dataframe(transactions_df, use_container_width=True)
+        
+        csv = transactions_df.to_csv(index=False)
+        st.download_button(
+            "Download Transaction Log",
+            data=csv.encode("utf-8"),
+            file_name="transactions.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("No transactions logged yet")
