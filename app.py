@@ -13,27 +13,43 @@ def fix_encoding(name: str) -> str:
 
 def load_bwar(path: str) -> dict[str, float]:
     data = {}
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            fields = line.strip().split(",")
-            if len(fields) < 3:
-                continue
-            player_name = fields[1]
-            war = float(fields[2])
-            data[fix_encoding(player_name)] = war
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                fields = line.strip().split(",")
+                if len(fields) < 3:
+                    continue
+                player_name = fields[1]
+                try:
+                    war = float(fields[2])
+                    data[fix_encoding(player_name)] = war
+                except ValueError:
+                    continue  # Skip lines with invalid WAR values
+    except FileNotFoundError:
+        st.warning(f"bWAR file '{path}' not found. Using empty data.")
+    except Exception as e:
+        st.error(f"Error loading bWAR file: {e}")
     return data
 
 
 def load_fwar(path: str) -> dict[str, float]:
     data = {}
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            fields = line.strip().split("\t")
-            if len(fields) < 7:
-                continue
-            player_name = fields[0].replace('"', "")
-            war = float(fields[6].replace('"', ""))
-            data[fix_encoding(player_name)] = war
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                fields = line.strip().split("\t")
+                if len(fields) < 7:
+                    continue
+                player_name = fields[0].replace('"', "")
+                try:
+                    war = float(fields[6].replace('"', ""))
+                    data[fix_encoding(player_name)] = war
+                except ValueError:
+                    continue  # Skip lines with invalid WAR values
+    except FileNotFoundError:
+        st.warning(f"fWAR file '{path}' not found. Using empty data.")
+    except Exception as e:
+        st.error(f"Error loading fWAR file: {e}")
     return data
 
 
@@ -213,11 +229,11 @@ def build_team_summary_df(war_map: dict[str, float]) -> pd.DataFrame:
 
 def render_team(team_name: str, team_data: dict[str, object], war_map: dict[str, float]) -> None:
     summary = team_summary(team_name, team_data, war_map)
-    st.markdown(f"### {summary['Team']}")
+    st.markdown(f"### ⚾ {summary['Team']}")
     st.write("**Starter roster**")
-    st.dataframe(pd.DataFrame(summary["Starter Rows"]), use_container_width=True)
+    st.dataframe(pd.DataFrame(summary["Starter Rows"]), width='stretch')
     st.write("**Reserve roster**")
-    st.dataframe(pd.DataFrame(summary["Reserve Rows"]), use_container_width=True)
+    st.dataframe(pd.DataFrame(summary["Reserve Rows"]), width='stretch')
     st.markdown(
         f"**Starter WAR:** {summary['Starter WAR']}   |   **Reserve WAR:** {summary['Reserve WAR']}   |   **Total WAR:** {summary['Total WAR']}"
     )
@@ -241,10 +257,14 @@ team_tab, leaderboard_tab, transactions_tab = st.tabs(["Fantasy Teams", "Leaderb
 with team_tab:
     st.subheader("Fantasy team standings")
     summary_df = build_team_summary_df(war_map)
-    st.dataframe(summary_df, use_container_width=True)
+    st.dataframe(summary_df, width='stretch')
+    st.markdown("---")
+    st.subheader("Team WAR Visualization")
+    chart_data = summary_df[["Team", "Total WAR"]].sort_values("Total WAR", ascending=False).set_index("Team")
+    st.bar_chart(chart_data)
     st.markdown("---")
     for team_name, team_data in TEAMS.items():
-        with st.expander(f"{team_name}", expanded=False):
+        with st.expander(f"⚾ {team_name}", expanded=False):
             render_team(team_name, team_data, war_map)
 
 with leaderboard_tab:
@@ -253,10 +273,10 @@ with leaderboard_tab:
         mask = scores_df["Player"].str.contains(query, case=False, na=False)
         results = scores_df[mask]
         st.subheader(f"Matches for: {query}")
-        st.dataframe(results, use_container_width=True)
+        st.dataframe(results, width='stretch')
     else:
         st.subheader("Leaderboard")
-        st.dataframe(scores_df, use_container_width=True)
+        st.dataframe(scores_df, width='stretch')
 
     st.download_button(
         "Download CSV",
@@ -271,7 +291,7 @@ with transactions_tab:
     
     transactions_df = load_transactions()
     if not transactions_df.empty:
-        st.dataframe(transactions_df, use_container_width=True)
+        st.dataframe(transactions_df, width='stretch')
         
         csv = transactions_df.to_csv(index=False)
         st.download_button(
