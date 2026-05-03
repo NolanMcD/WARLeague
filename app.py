@@ -231,9 +231,9 @@ def render_team(team_name: str, team_data: dict[str, object], war_map: dict[str,
     summary = team_summary(team_name, team_data, war_map)
     st.markdown(f"### ⚾ {summary['Team']}")
     st.write("**Starter roster**")
-    st.dataframe(pd.DataFrame(summary["Starter Rows"]), width='stretch')
+    st.dataframe(pd.DataFrame(summary["Starter Rows"]), use_container_width=True)
     st.write("**Reserve roster**")
-    st.dataframe(pd.DataFrame(summary["Reserve Rows"]), width='stretch')
+    st.dataframe(pd.DataFrame(summary["Reserve Rows"]), use_container_width=True)
     st.markdown(
         f"**Starter WAR:** {summary['Starter WAR']}   |   **Reserve WAR:** {summary['Reserve WAR']}   |   **Total WAR:** {summary['Total WAR']}"
     )
@@ -257,7 +257,7 @@ team_tab, leaderboard_tab, transactions_tab = st.tabs(["Fantasy Teams", "Leaderb
 with team_tab:
     st.subheader("Fantasy team standings")
     summary_df = build_team_summary_df(war_map)
-    st.dataframe(summary_df, width='stretch')
+    st.dataframe(summary_df, use_container_width=True)
     st.markdown("---")
     st.subheader("Team WAR Visualization")
     chart_data = summary_df[["Team", "Total WAR"]].sort_values("Total WAR", ascending=False).set_index("Team")
@@ -273,10 +273,10 @@ with leaderboard_tab:
         mask = scores_df["Player"].str.contains(query, case=False, na=False)
         results = scores_df[mask]
         st.subheader(f"Matches for: {query}")
-        st.dataframe(results, width='stretch')
+        st.dataframe(results, use_container_width=True)
     else:
         st.subheader("Leaderboard")
-        st.dataframe(scores_df, width='stretch')
+        st.dataframe(scores_df, use_container_width=True)
 
     st.download_button(
         "Download CSV",
@@ -291,7 +291,7 @@ with transactions_tab:
     
     transactions_df = load_transactions()
     if not transactions_df.empty:
-        st.dataframe(transactions_df, width='stretch')
+        st.dataframe(transactions_df, use_container_width=True)
         
         csv = transactions_df.to_csv(index=False)
         st.download_button(
