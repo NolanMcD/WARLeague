@@ -110,7 +110,7 @@ TEAMS: dict[str, dict[str, object]] = {
             "Matt Olson",
             "Nico Hoerner",
         ],
-        "reserves": ["Zach Neto", "Jackson Merrill"],
+        "reserves": ["Zach Neto", "Andy Pages"],
     },
     "Ben": {
         "owner": "Ben",
@@ -229,13 +229,13 @@ def build_team_summary_df(war_map: dict[str, float]) -> pd.DataFrame:
 
 def render_team(team_name: str, team_data: dict[str, object], war_map: dict[str, float]) -> None:
     summary = team_summary(team_name, team_data, war_map)
-    st.markdown(f"### ⚾ {summary['Team']}")
-    st.write("**Starter roster**")
+    st.markdown(f"### {summary['Team']}")
+    st.write("Starter roster")
     st.dataframe(pd.DataFrame(summary["Starter Rows"]), use_container_width=True)
-    st.write("**Reserve roster**")
+    st.write("Reserve roster")
     st.dataframe(pd.DataFrame(summary["Reserve Rows"]), use_container_width=True)
     st.markdown(
-        f"**Starter WAR:** {summary['Starter WAR']}   |   **Reserve WAR:** {summary['Reserve WAR']}   |   **Total WAR:** {summary['Total WAR']}"
+        f"Starter WAR: {summary['Starter WAR']}   |   Reserve WAR: {summary['Reserve WAR']}   |   Total WAR: {summary['Total WAR']}"
     )
 
 
@@ -258,13 +258,8 @@ with team_tab:
     st.subheader("Fantasy team standings")
     summary_df = build_team_summary_df(war_map)
     st.dataframe(summary_df, use_container_width=True)
-    st.markdown("---")
-    st.subheader("Team WAR Visualization")
-    chart_data = summary_df[["Team", "Total WAR"]].sort_values("Total WAR", ascending=False).set_index("Team")
-    st.bar_chart(chart_data)
-    st.markdown("---")
     for team_name, team_data in TEAMS.items():
-        with st.expander(f"⚾ {team_name}", expanded=False):
+        with st.expander(team_name, expanded=False):
             render_team(team_name, team_data, war_map)
 
 with leaderboard_tab:
