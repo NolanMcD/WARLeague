@@ -1,10 +1,18 @@
 import pandas as pd
 import streamlit as st
 import os
+import inspect
 
 
 TEAM_COLUMNS = ["Team", "Owner", "Role", "Player"]
 TRANSACTION_COLUMNS = ["Date", "Owner 1", "Owner 2", "Description", "WAR Adjustment"]
+
+
+def show_dataframe(df: pd.DataFrame) -> None:
+    if "width" in inspect.signature(st.dataframe).parameters:
+        st.dataframe(df, width="stretch")
+    else:
+        st.dataframe(df, use_container_width=True)
 
 
 def fix_encoding(name: str) -> str:
@@ -74,9 +82,9 @@ def build_scores() -> pd.DataFrame:
     combined = add_dicts(b, f)
     combined = round_dict_values(combined, 1)
 
-    df = pd.DataFrame(
-        [{"Player": k, "WAR": v} for k, v in combined.items()]
-    ).sort_values("WAR", ascending=False, ignore_index=True)
+    df = pd.DataFrame([{"Player": k, "WAR": v} for k, v in combined.items()], columns=["Player", "WAR"])
+    if not df.empty:
+        df = df.sort_values("WAR", ascending=False, ignore_index=True)
 
     return df
 
@@ -120,6 +128,8 @@ def load_teams(path: str = "teams.csv") -> dict[str, dict[str, object]]:
 
 
 def player_war_map(df: pd.DataFrame) -> dict[str, float]:
+    if df.empty or "Player" not in df.columns or "WAR" not in df.columns:
+        return {}
     return df.set_index("Player")["WAR"].to_dict()
 
 
@@ -195,7 +205,12 @@ def build_team_summary_df(
         for team_name, team_data in teams.items()
         for summary in [team_summary(team_name, team_data, war_map, adjustments)]
     ]
-    df = pd.DataFrame(rows).sort_values("Starter WAR", ascending=False, ignore_index=True)
+    df = pd.DataFrame(
+        rows,
+        columns=["Team", "Starter WAR", "Reserve WAR", "Roster WAR", "Adjustment", "Total WAR"],
+    )
+    if not df.empty:
+        df = df.sort_values("Starter WAR", ascending=False, ignore_index=True)
     df.index = df.index + 1
     return df
 
@@ -209,9 +224,9 @@ def render_team(
     summary = team_summary(team_name, team_data, war_map, adjustments)
     st.markdown(f"### {summary['Team']}")
     st.write("Starter roster")
-    st.dataframe(pd.DataFrame(summary["Starter Rows"]), width="stretch")
+    show_dataframe(pd.DataFrame(summary["Starter Rows"]))
     st.write("Reserve roster")
-    st.dataframe(pd.DataFrame(summary["Reserve Rows"]), width="stretch")
+    show_dataframe(pd.DataFrame(summary["Reserve Rows"]))
     st.markdown(
         f"Starter WAR: {summary['Starter WAR']}   |   Reserve WAR: {summary['Reserve WAR']}   |   Adjustment: {summary['Adjustment']}   |   Total WAR: {summary['Total WAR']}"
     )
@@ -259,9 +274,9 @@ with team_tab:
 
     if unmatched_players:
         with st.expander("Roster names not found in WAR data", expanded=True):
-            st.dataframe(pd.DataFrame(unmatched_players), width="stretch")
+            show_dataframe(pd.DataFrame(unmatched_players))
 
-    st.dataframe(summary_df, width="stretch")
+    show_dataframe(summary_df)
     for team_name, team_data in teams.items():
         with st.expander(team_name, expanded=False):
             render_team(team_name, team_data, war_map, adjustments)
@@ -272,10 +287,10 @@ with leaderboard_tab:
         mask = scores_df["Player"].str.contains(query, case=False, na=False)
         results = scores_df[mask]
         st.subheader(f"Matches for: {query}")
-        st.dataframe(results, width="stretch")
+        show_dataframe(results)
     else:
         st.subheader("Leaderboard")
-        st.dataframe(scores_df, width="stretch")
+        show_dataframe(scores_df)
 
     st.download_button(
         "Download CSV",
@@ -289,7 +304,7 @@ with transactions_tab:
     st.info("Transactions are managed via the transactions.csv file. WAR Adjustment is applied to Owner 1 in the standings.")
 
     if not transactions_df.empty:
-        st.dataframe(transactions_df, width="stretch")
+        show_dataframe(transactions_df)
         
         csv = transactions_df.to_csv(index=False)
         st.download_button(
