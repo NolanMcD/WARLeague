@@ -88,7 +88,7 @@ TEAMS: dict[str, dict[str, object]] = {
             "Roman Anthony",
             "Jeremy Peña",
         ],
-        "reserves": ["Wilyer Abreu", "James Wood"],
+        "reserves": ["Jacob Misiorowski", "James Wood"],
     },
     "Mav": {
         "owner": "Mav",
