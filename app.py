@@ -3,6 +3,7 @@ import streamlit as st
 import os
 import inspect
 import subprocess
+import re
 from datetime import date
 from html import escape
 from typing import Optional
@@ -10,6 +11,7 @@ from typing import Optional
 
 TEAM_COLUMNS = ["Team", "Owner", "Role", "Player"]
 TRANSACTION_COLUMNS = ["Date", "Week", "Team", "Type", "Player Out", "Player In", "Description"]
+TRANSACTION_TYPES = ["Promotion/Demotion", "Add/Drop"]
 TEAM_COLOR_PALETTE = [
     "#d98f8f",
     "#e1b95f",
@@ -335,6 +337,9 @@ def load_transactions() -> pd.DataFrame:
         for column in TRANSACTION_COLUMNS:
             if column not in df.columns:
                 df[column] = ""
+        df = df[TRANSACTION_COLUMNS].fillna("")
+        for column in TRANSACTION_COLUMNS:
+            df[column] = df[column].astype(str).str.strip()
         if "Date" in df.columns:
             parsed_dates = pd.to_datetime(df["Date"], errors="coerce")
             derived_weeks = parsed_dates.dt.strftime("%G-W%V").fillna("")
@@ -362,7 +367,10 @@ def save_team_rows(df: pd.DataFrame, path: str = "teams.csv") -> None:
 
 
 def save_transactions(df: pd.DataFrame, path: str = "transactions.csv") -> None:
-    df[TRANSACTION_COLUMNS].to_csv(path, index=False)
+    clean_df = df[TRANSACTION_COLUMNS].fillna("")
+    for column in TRANSACTION_COLUMNS:
+        clean_df[column] = clean_df[column].astype(str).str.strip()
+    clean_df.to_csv(path, index=False)
 
 
 def current_week_key(today: Optional[date] = None) -> str:
@@ -380,6 +388,54 @@ def transactions_this_week(transactions_df: pd.DataFrame, team_name: str, week_k
     if "Team" not in df.columns:
         df["Team"] = ""
     return df[(df["Team"].astype(str) == team_name) & (df["Week"].astype(str) == week_key)]
+
+
+def transaction_data_issues(transactions_df: pd.DataFrame, teams: dict[str, dict[str, object]]) -> list[dict[str, str]]:
+    issues = []
+    if transactions_df.empty:
+        return issues
+
+    valid_teams = set(teams.keys())
+    week_pattern = re.compile(r"^\d{4}-W\d{2}$")
+    parsed_dates = pd.to_datetime(transactions_df["Date"], errors="coerce")
+
+    for index, row in transactions_df.iterrows():
+        row_number = str(index + 2)
+        date_value = str(row.get("Date", "")).strip()
+        week_value = str(row.get("Week", "")).strip()
+        team_value = str(row.get("Team", "")).strip()
+        type_value = str(row.get("Type", "")).strip()
+
+        if not date_value:
+            issues.append({"Row": row_number, "Issue": "Missing Date"})
+        elif pd.isna(parsed_dates.iloc[index]):
+            issues.append({"Row": row_number, "Issue": f"Invalid Date '{date_value}'"})
+
+        if not week_value:
+            issues.append({"Row": row_number, "Issue": "Missing Week; weekly limits may not work"})
+        elif not week_pattern.match(week_value):
+            issues.append({"Row": row_number, "Issue": f"Week should look like 2026-W28, found '{week_value}'"})
+
+        if not team_value:
+            issues.append({"Row": row_number, "Issue": "Missing Team; weekly limits may not work"})
+        elif team_value not in valid_teams:
+            issues.append({"Row": row_number, "Issue": f"Team '{team_value}' is not in teams.csv"})
+
+        if type_value and type_value not in TRANSACTION_TYPES:
+            issues.append({"Row": row_number, "Issue": f"Unknown Type '{type_value}'"})
+
+    duplicate_rows = transactions_df[
+        transactions_df["Team"].astype(str).str.strip().ne("")
+        & transactions_df["Week"].astype(str).str.strip().ne("")
+        & transactions_df.duplicated(["Team", "Week"], keep=False)
+    ]
+    for _, row in duplicate_rows.iterrows():
+        issues.append({
+            "Row": "Multiple",
+            "Issue": f"{row['Team']} has more than one transaction logged for {row['Week']}",
+        })
+
+    return issues
 
 
 def free_agent_options(scores_df: pd.DataFrame, player_teams: dict[str, str]) -> list[str]:
@@ -526,6 +582,10 @@ with leaderboard_tab:
 with transactions_tab:
     st.subheader("Transaction Log")
     st.caption("Each team can make one transaction per ISO week. Transactions update the roster file immediately.")
+    transaction_issues = transaction_data_issues(transactions_df, teams)
+    if transaction_issues:
+        with st.expander("Transaction log issues", expanded=True):
+            show_dataframe(pd.DataFrame(transaction_issues))
 
     if not transactions_df.empty:
         display_transactions = transactions_df.sort_values(["Date", "Team"], ascending=[False, True], ignore_index=True)
@@ -564,7 +624,7 @@ with transactions_tab:
 
         transaction_type = st.radio(
             "Transaction type",
-            options=["Promotion/Demotion", "Add/Drop"],
+            options=TRANSACTION_TYPES,
             horizontal=True,
             key="transaction_type",
         )
