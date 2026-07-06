@@ -2,10 +2,10 @@ Team,Owner,Role,Player
 Spence,Spence,starter,Bobby Witt Jr.
 Spence,Spence,starter,Jacob Misiorowski
 Spence,Spence,starter,Ronald Acuña Jr.
-Spence,Spence,starter,Roman Anthony
+Spence,Spence,reserve,Roman Anthony
 Spence,Spence,starter,Jeremy Peña
 Spence,Spence,reserve,Garrett Crochet
-Spence,Spence,reserve,James Wood
+Spence,Spence,starter,James Wood
 Mav,Mav,starter,Shohei Ohtani
 Mav,Mav,starter,Yoshinobu Yamamoto
 Mav,Mav,starter,Wyatt Langford
@@ -19,7 +19,7 @@ Kev,Kev,starter,Geraldo Perdomo
 Kev,Kev,starter,Matt Olson
 Kev,Kev,starter,Andy Pages
 Kev,Kev,reserve,Zach Neto
-Kev,Kev,reserve,Nico Hoerner
+Kev,Kev,reserve,JJ Wetherholt
 Ben,Ben,starter,Cal Raleigh
 Ben,Ben,starter,José Ramírez
 Ben,Ben,starter,Mookie Betts
@@ -32,15 +32,15 @@ Aaron,Aaron,starter,Nick Kurtz
 Aaron,Aaron,starter,Corbin Carroll
 Aaron,Aaron,starter,Max Fried
 Aaron,Aaron,starter,Brice Turang
-Aaron,Aaron,reserve,Will Smith
+Aaron,Aaron,reserve,Dillon Dingler
 Aaron,Aaron,reserve,Kazuma Okamoto
 Nolan,Nolan,starter,Aaron Judge
 Nolan,Nolan,starter,Kyle Tucker
 Nolan,Nolan,starter,Francisco Lindor
 Nolan,Nolan,starter,Maikel Garcia
-Nolan,Nolan,starter,Trea Turner
+Nolan,Nolan,reserve,Trea Turner
 Nolan,Nolan,reserve,Nolan McLean
-Nolan,Nolan,reserve,Chris Sale
+Nolan,Nolan,starter,Chris Sale
 Emilio,Emilio,starter,Gunnar Henderson
 Emilio,Emilio,starter,Corey Seager
 Emilio,Emilio,starter,Yordan Alvarez

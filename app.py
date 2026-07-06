@@ -3,11 +3,13 @@ import streamlit as st
 import os
 import inspect
 import subprocess
+from datetime import date
 from html import escape
+from typing import Optional
 
 
 TEAM_COLUMNS = ["Team", "Owner", "Role", "Player"]
-TRANSACTION_COLUMNS = ["Date", "Owner 1", "Owner 2", "Description", "WAR Adjustment"]
+TRANSACTION_COLUMNS = ["Date", "Week", "Team", "Type", "Player Out", "Player In", "Description"]
 TEAM_COLOR_PALETTE = [
     "#d98f8f",
     "#e1b95f",
@@ -261,15 +263,14 @@ def team_summary(
     reserve_rows = team_player_rows(team_data["reserves"], war_map)
     starter_total = sum(row["WAR"] for row in starter_rows)
     reserve_total = sum(row["WAR"] for row in reserve_rows)
-    adjustment = adjustments.get(team_name, adjustments.get(str(team_data["owner"]), 0.0))
     roster_total = starter_total + reserve_total
     return {
         "Team": team_name,
         "Starter WAR": round(starter_total, 1),
         "Reserve WAR": round(reserve_total, 1),
         "Roster WAR": round(roster_total, 1),
-        "Adjustment": round(adjustment, 1),
-        "Total WAR": round(roster_total + adjustment, 1),
+        "Adjustment": 0.0,
+        "Total WAR": round(roster_total, 1),
         "Starter Rows": starter_rows,
         "Reserve Rows": reserve_rows,
     }
@@ -296,7 +297,7 @@ def build_team_summary_df(
         columns=["Team", "Starter WAR", "Reserve WAR", "Roster WAR", "Total WAR"],
     )
     if not df.empty:
-        df = df.sort_values("Starter WAR", ascending=False, ignore_index=True)
+        df = df.sort_values("Total WAR", ascending=False, ignore_index=True)
     df.index = df.index + 1
     return df
 
@@ -321,8 +322,126 @@ def render_team(
 def load_transactions() -> pd.DataFrame:
     transactions_file = "transactions.csv"
     if os.path.exists(transactions_file):
-        return pd.read_csv(transactions_file)
+        try:
+            df = pd.read_csv(transactions_file)
+        except Exception as e:
+            st.error(f"Error loading transaction file: {e}")
+            return pd.DataFrame(columns=TRANSACTION_COLUMNS)
+
+        if "Team" not in df.columns and "Owner 1" in df.columns:
+            df["Team"] = df["Owner 1"]
+        if "Description" not in df.columns:
+            df["Description"] = ""
+        for column in TRANSACTION_COLUMNS:
+            if column not in df.columns:
+                df[column] = ""
+        if "Date" in df.columns:
+            parsed_dates = pd.to_datetime(df["Date"], errors="coerce")
+            derived_weeks = parsed_dates.dt.strftime("%G-W%V").fillna("")
+            df["Week"] = df["Week"].where(df["Week"].astype(str).str.strip() != "", derived_weeks)
+        return df[TRANSACTION_COLUMNS]
     return pd.DataFrame(columns=TRANSACTION_COLUMNS)
+
+
+def load_team_rows(path: str = "teams.csv") -> pd.DataFrame:
+    if os.path.exists(path):
+        try:
+            df = pd.read_csv(path)
+        except Exception as e:
+            st.error(f"Error loading team file: {e}")
+            return pd.DataFrame(columns=TEAM_COLUMNS)
+        for column in TEAM_COLUMNS:
+            if column not in df.columns:
+                df[column] = ""
+        return df[TEAM_COLUMNS]
+    return pd.DataFrame(columns=TEAM_COLUMNS)
+
+
+def save_team_rows(df: pd.DataFrame, path: str = "teams.csv") -> None:
+    df[TEAM_COLUMNS].to_csv(path, index=False)
+
+
+def save_transactions(df: pd.DataFrame, path: str = "transactions.csv") -> None:
+    df[TRANSACTION_COLUMNS].to_csv(path, index=False)
+
+
+def current_week_key(today: Optional[date] = None) -> str:
+    today = today or date.today()
+    iso_year, iso_week, _ = today.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
+def transactions_this_week(transactions_df: pd.DataFrame, team_name: str, week_key: str) -> pd.DataFrame:
+    if transactions_df.empty:
+        return transactions_df
+    df = transactions_df.copy()
+    if "Week" not in df.columns:
+        df["Week"] = ""
+    if "Team" not in df.columns:
+        df["Team"] = ""
+    return df[(df["Team"].astype(str) == team_name) & (df["Week"].astype(str) == week_key)]
+
+
+def free_agent_options(scores_df: pd.DataFrame, player_teams: dict[str, str]) -> list[str]:
+    if scores_df.empty:
+        return []
+    return [
+        str(row["Player"])
+        for _, row in scores_df.iterrows()
+        if str(row["Player"]) not in player_teams
+    ]
+
+
+def format_player_option(player: str, war_map: dict[str, float]) -> str:
+    return f"{player} ({lookup_player_war(player, war_map):.1f} WAR)"
+
+
+def log_transaction(
+    transactions_df: pd.DataFrame,
+    team_name: str,
+    transaction_type: str,
+    player_out: str,
+    player_in: str,
+    description: str,
+) -> pd.DataFrame:
+    row = {
+        "Date": date.today().isoformat(),
+        "Week": current_week_key(),
+        "Team": team_name,
+        "Type": transaction_type,
+        "Player Out": player_out,
+        "Player In": player_in,
+        "Description": description,
+    }
+    return pd.concat([transactions_df, pd.DataFrame([row])], ignore_index=True)
+
+
+def swap_starter_and_reserve(team_name: str, starter: str, reserve: str) -> None:
+    df = load_team_rows()
+    starter_mask = (
+        (df["Team"].astype(str) == team_name)
+        & (df["Role"].astype(str).str.lower() == "starter")
+        & (df["Player"].map(lambda value: fix_encoding(str(value).strip())) == starter)
+    )
+    reserve_mask = (
+        (df["Team"].astype(str) == team_name)
+        & (df["Role"].astype(str).str.lower() == "reserve")
+        & (df["Player"].map(lambda value: fix_encoding(str(value).strip())) == reserve)
+    )
+    df.loc[starter_mask, "Role"] = "reserve"
+    df.loc[reserve_mask, "Role"] = "starter"
+    save_team_rows(df)
+
+
+def replace_reserve(team_name: str, dropped_player: str, added_player: str) -> None:
+    df = load_team_rows()
+    reserve_mask = (
+        (df["Team"].astype(str) == team_name)
+        & (df["Role"].astype(str).str.lower() == "reserve")
+        & (df["Player"].map(lambda value: fix_encoding(str(value).strip())) == dropped_player)
+    )
+    df.loc[reserve_mask, "Player"] = added_player
+    save_team_rows(df)
 
 
 def last_update_date() -> str:
@@ -406,10 +525,11 @@ with leaderboard_tab:
 
 with transactions_tab:
     st.subheader("Transaction Log")
-    st.info("Transactions are managed via the transactions.csv file. WAR Adjustment is applied to Owner 1 in the standings.")
+    st.caption("Each team can make one transaction per ISO week. Transactions update the roster file immediately.")
 
     if not transactions_df.empty:
-        show_dataframe(transactions_df)
+        display_transactions = transactions_df.sort_values(["Date", "Team"], ascending=[False, True], ignore_index=True)
+        show_dataframe(display_transactions)
         
         csv = transactions_df.to_csv(index=False)
         st.download_button(
@@ -420,3 +540,117 @@ with transactions_tab:
         )
     else:
         st.info("No transactions logged yet")
+
+    st.divider()
+    st.subheader("Make a Transaction")
+
+    if not teams:
+        st.warning("No teams are available.")
+    else:
+        week_key = current_week_key()
+        selected_team = st.selectbox("Team", options=list(teams.keys()), key="transaction_team")
+        selected_team_data = teams[selected_team]
+        weekly_transactions = transactions_this_week(transactions_df, selected_team, week_key)
+        transaction_used = not weekly_transactions.empty
+
+        if transaction_used:
+            last_move = weekly_transactions.iloc[-1]
+            st.warning(
+                f"{selected_team} has already used its transaction for {week_key}: "
+                f"{last_move['Description']}"
+            )
+        else:
+            st.success(f"{selected_team} has a transaction available for {week_key}.")
+
+        transaction_type = st.radio(
+            "Transaction type",
+            options=["Promotion/Demotion", "Add/Drop"],
+            horizontal=True,
+            key="transaction_type",
+        )
+
+        if transaction_type == "Promotion/Demotion":
+            starters = list(selected_team_data["starters"])
+            reserves = list(selected_team_data["reserves"])
+            if not starters or not reserves:
+                st.info("This team needs at least one starter and one reserve to swap players.")
+            else:
+                with st.form("promotion_demotion_form"):
+                    starter = st.selectbox(
+                        "Demote starter",
+                        options=starters,
+                        format_func=lambda player: format_player_option(player, war_map),
+                    )
+                    reserve = st.selectbox(
+                        "Promote reserve",
+                        options=reserves,
+                        format_func=lambda player: format_player_option(player, war_map),
+                    )
+                    submitted = st.form_submit_button("Submit Promotion/Demotion", disabled=transaction_used)
+
+                if submitted:
+                    latest_transactions = load_transactions()
+                    if not transactions_this_week(latest_transactions, selected_team, week_key).empty:
+                        st.error(f"{selected_team} has already used its transaction for {week_key}.")
+                        st.stop()
+                    description = (
+                        f"Promoted {reserve} ({lookup_player_war(reserve, war_map):.1f} WAR) "
+                        f"and demoted {starter} ({lookup_player_war(starter, war_map):.1f} WAR)"
+                    )
+                    swap_starter_and_reserve(selected_team, starter, reserve)
+                    updated_transactions = log_transaction(
+                        latest_transactions,
+                        selected_team,
+                        "Promotion/Demotion",
+                        starter,
+                        reserve,
+                        description,
+                    )
+                    save_transactions(updated_transactions)
+                    st.cache_data.clear()
+                    st.success(description)
+                    st.rerun()
+
+        if transaction_type == "Add/Drop":
+            reserves = list(selected_team_data["reserves"])
+            free_agents = free_agent_options(scores_df, player_teams)
+            if not reserves:
+                st.info("This team has no reserve player available to drop.")
+            elif not free_agents:
+                st.info("No eligible free agents are available from the leaderboard.")
+            else:
+                with st.form("add_drop_form"):
+                    dropped_player = st.selectbox(
+                        "Drop reserve",
+                        options=reserves,
+                        format_func=lambda player: format_player_option(player, war_map),
+                    )
+                    added_player = st.selectbox(
+                        "Add free agent",
+                        options=free_agents,
+                        format_func=lambda player: format_player_option(player, war_map),
+                    )
+                    submitted = st.form_submit_button("Submit Add/Drop", disabled=transaction_used)
+
+                if submitted:
+                    latest_transactions = load_transactions()
+                    if not transactions_this_week(latest_transactions, selected_team, week_key).empty:
+                        st.error(f"{selected_team} has already used its transaction for {week_key}.")
+                        st.stop()
+                    description = (
+                        f"Added {added_player} ({lookup_player_war(added_player, war_map):.1f} WAR) "
+                        f"and dropped {dropped_player} ({lookup_player_war(dropped_player, war_map):.1f} WAR)"
+                    )
+                    replace_reserve(selected_team, dropped_player, added_player)
+                    updated_transactions = log_transaction(
+                        latest_transactions,
+                        selected_team,
+                        "Add/Drop",
+                        dropped_player,
+                        added_player,
+                        description,
+                    )
+                    save_transactions(updated_transactions)
+                    st.cache_data.clear()
+                    st.success(description)
+                    st.rerun()

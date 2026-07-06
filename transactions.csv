@@ -1,2 +1,6 @@
-Date,Owner 1,Owner 2,Description,WAR Adjustment
-2026-04-10,Spence,Free Agency,Added Wilyer Abreu (dropped Ceddanne Rafaela),0.0
+Date,Week,Team,Type,Player Out,Player In,Description
+2026-04-10,2026-W15,Spence,,,,Added Wilyer Abreu (dropped Ceddanne Rafaela)
+2026-07-06,2026-W28,Nolan,Promotion/Demotion,Trea Turner,Chris Sale,Promoted Chris Sale (5.4 WAR) and demoted Trea Turner (0.3 WAR)
+2026-07-06,2026-W28,Spence,Promotion/Demotion,Roman Anthony,James Wood,Promoted James Wood (6.6 WAR) and demoted Roman Anthony (1.1 WAR)
+2026-07-06,2026-W28,Aaron,Add/Drop,Will Smith,Dillon Dingler,Added Dillon Dingler (7.2 WAR) and dropped Will Smith (1.9 WAR)
+2026-07-06,2026-W28,Kev,Add/Drop,Nico Hoerner,JJ Wetherholt,Added JJ Wetherholt (7.9 WAR) and dropped Nico Hoerner (2.8 WAR)
