@@ -2,10 +2,24 @@ import pandas as pd
 import streamlit as st
 import os
 import inspect
+import subprocess
+from html import escape
 
 
 TEAM_COLUMNS = ["Team", "Owner", "Role", "Player"]
 TRANSACTION_COLUMNS = ["Date", "Owner 1", "Owner 2", "Description", "WAR Adjustment"]
+TEAM_COLOR_PALETTE = [
+    "#d98f8f",
+    "#e1b95f",
+    "#a9c977",
+    "#78bea8",
+    "#7fb4e4",
+    "#9d8fe1",
+    "#dc8ab5",
+    "#a99c8f",
+    "#8dacbf",
+    "#b8aa6f",
+]
 
 
 def show_dataframe(df: pd.DataFrame) -> None:
@@ -111,7 +125,7 @@ def load_teams(path: str = "teams.csv") -> dict[str, dict[str, object]]:
         team_name = str(row["Team"]).strip()
         owner = str(row["Owner"]).strip() if pd.notna(row["Owner"]) else team_name
         role = str(row["Role"]).strip().lower()
-        player = str(row["Player"]).strip()
+        player = fix_encoding(str(row["Player"]).strip())
 
         if not team_name or not player:
             continue
@@ -142,6 +156,79 @@ def team_player_rows(player_names: list[str], war_map: dict[str, float]) -> list
         {"Player": name, "WAR": lookup_player_war(name, war_map)}
         for name in player_names
     ]
+
+
+def build_player_team_map(teams: dict[str, dict[str, object]]) -> dict[str, str]:
+    player_teams = {}
+    for team_name, team_data in teams.items():
+        for role in ("starters", "reserves"):
+            for player in team_data[role]:
+                player_teams[player] = team_name
+    return player_teams
+
+
+def build_team_color_map(teams: dict[str, dict[str, object]]) -> dict[str, str]:
+    return {
+        team_name: TEAM_COLOR_PALETTE[index % len(TEAM_COLOR_PALETTE)]
+        for index, team_name in enumerate(teams.keys())
+    }
+
+
+def leaderboard_with_teams(scores_df: pd.DataFrame, player_teams: dict[str, str]) -> pd.DataFrame:
+    leaderboard_df = scores_df.copy()
+    leaderboard_df["Team"] = leaderboard_df["Player"].map(player_teams).fillna("")
+    return leaderboard_df[["Player", "Team", "WAR"]]
+
+
+def show_leaderboard(df: pd.DataFrame, team_colors: dict[str, str]) -> None:
+    rows = []
+    for _, row in df.iterrows():
+        team = str(row["Team"])
+        color = team_colors.get(team, "transparent")
+        rows.append(
+            "<tr style='background-color: {color};'>"
+            "<td>{player}</td>"
+            "<td>{team}</td>"
+            "<td style='text-align: right;'>{war:.1f}</td>"
+            "</tr>".format(
+                color=color,
+                player=escape(str(row["Player"])),
+                team=escape(team),
+                war=float(row["WAR"]),
+            )
+        )
+
+    table_html = f"""
+    <style>
+        .leaderboard-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }}
+        .leaderboard-table th,
+        .leaderboard-table td {{
+            border-bottom: 1px solid rgba(49, 51, 63, 0.15);
+            padding: 0.45rem 0.65rem;
+        }}
+        .leaderboard-table th {{
+            background-color: #f6f7f9;
+            color: #31333f;
+            font-weight: 600;
+            text-align: left;
+        }}
+    </style>
+    <table class="leaderboard-table">
+        <thead>
+            <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th style="text-align: right;">WAR</th>
+            </tr>
+        </thead>
+        <tbody>{"".join(rows)}</tbody>
+    </table>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
 
 
 def transaction_adjustments(transactions_df: pd.DataFrame) -> dict[str, float]:
@@ -199,7 +286,6 @@ def build_team_summary_df(
             "Starter WAR": summary["Starter WAR"],
             "Reserve WAR": summary["Reserve WAR"],
             "Roster WAR": summary["Roster WAR"],
-            "Adjustment": summary["Adjustment"],
             "Total WAR": summary["Total WAR"],
         }
         for team_name, team_data in teams.items()
@@ -207,7 +293,7 @@ def build_team_summary_df(
     ]
     df = pd.DataFrame(
         rows,
-        columns=["Team", "Starter WAR", "Reserve WAR", "Roster WAR", "Adjustment", "Total WAR"],
+        columns=["Team", "Starter WAR", "Reserve WAR", "Roster WAR", "Total WAR"],
     )
     if not df.empty:
         df = df.sort_values("Starter WAR", ascending=False, ignore_index=True)
@@ -228,7 +314,7 @@ def render_team(
     st.write("Reserve roster")
     show_dataframe(pd.DataFrame(summary["Reserve Rows"]))
     st.markdown(
-        f"Starter WAR: {summary['Starter WAR']}   |   Reserve WAR: {summary['Reserve WAR']}   |   Adjustment: {summary['Adjustment']}   |   Total WAR: {summary['Total WAR']}"
+        f"Starter WAR: {summary['Starter WAR']}   |   Reserve WAR: {summary['Reserve WAR']}   |   Total WAR: {summary['Total WAR']}"
     )
 
 
@@ -239,20 +325,36 @@ def load_transactions() -> pd.DataFrame:
     return pd.DataFrame(columns=TRANSACTION_COLUMNS)
 
 
-def render_summary_metrics(summary_df: pd.DataFrame, unmatched_count: int, transactions_df: pd.DataFrame) -> None:
+def last_update_date() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%cs"],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        date = result.stdout.strip()
+        if date:
+            return date
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    try:
+        return pd.Timestamp(os.path.getmtime(__file__), unit="s").strftime("%Y-%m-%d")
+    except OSError:
+        return "Unknown"
+
+
+def render_summary_metrics(summary_df: pd.DataFrame, unmatched_count: int) -> None:
     leader = summary_df.iloc[0] if not summary_df.empty else None
-    last_transaction = "None"
-    if not transactions_df.empty and "Date" in transactions_df.columns:
-        dates = pd.to_datetime(transactions_df["Date"], errors="coerce").dropna()
-        if not dates.empty:
-            last_transaction = dates.max().strftime("%Y-%m-%d")
 
     cols = st.columns(5)
     cols[0].metric("Leader", leader["Team"] if leader is not None else "None")
     cols[1].metric("Starter WAR", f"{leader['Starter WAR']:.1f}" if leader is not None else "0.0")
     cols[2].metric("League WAR", f"{summary_df['Total WAR'].sum():.1f}" if not summary_df.empty else "0.0")
     cols[3].metric("Unmatched", unmatched_count)
-    cols[4].metric("Last Move", last_transaction)
+    cols[4].metric("Last Update", last_update_date())
 
 
 st.set_page_config(page_title="WAR League Scorebook", layout="wide")
@@ -261,6 +363,8 @@ st.title("WAR League Scorebook")
 scores_df = build_scores()
 war_map = player_war_map(scores_df)
 teams = load_teams()
+player_teams = build_player_team_map(teams)
+team_colors = build_team_color_map(teams)
 transactions_df = load_transactions()
 adjustments = transaction_adjustments(transactions_df)
 unmatched_players = unmatched_roster_players(teams, war_map)
@@ -270,7 +374,7 @@ team_tab, leaderboard_tab, transactions_tab = st.tabs(["Fantasy Teams", "Leaderb
 with team_tab:
     st.subheader("Fantasy team standings")
     summary_df = build_team_summary_df(teams, war_map, adjustments)
-    render_summary_metrics(summary_df, len(unmatched_players), transactions_df)
+    render_summary_metrics(summary_df, len(unmatched_players))
 
     if unmatched_players:
         with st.expander("Roster names not found in WAR data", expanded=True):
@@ -282,19 +386,20 @@ with team_tab:
             render_team(team_name, team_data, war_map, adjustments)
 
 with leaderboard_tab:
+    leaderboard_df = leaderboard_with_teams(scores_df, player_teams)
     query = st.text_input("Search player (partial match):", value="", key="leaderboard_query")
     if query.strip():
-        mask = scores_df["Player"].str.contains(query, case=False, na=False)
-        results = scores_df[mask]
+        mask = leaderboard_df["Player"].str.contains(query, case=False, na=False)
+        results = leaderboard_df[mask]
         st.subheader(f"Matches for: {query}")
-        show_dataframe(results)
+        show_leaderboard(results, team_colors)
     else:
         st.subheader("Leaderboard")
-        show_dataframe(scores_df)
+        show_leaderboard(leaderboard_df, team_colors)
 
     st.download_button(
         "Download CSV",
-        data=scores_df.to_csv(index=False).encode("utf-8"),
+        data=leaderboard_df.to_csv(index=False).encode("utf-8"),
         file_name="morescore.csv",
         mime="text/csv",
     )
