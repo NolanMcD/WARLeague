@@ -10,7 +10,7 @@ from typing import Optional
 
 
 TEAM_COLUMNS = ["Team", "Owner", "Role", "Player"]
-TRANSACTION_COLUMNS = ["Date", "Week", "Team", "Type", "Player Out", "Player In", "Description"]
+TRANSACTION_COLUMNS = ["Date", "Week", "Team", "Type", "Player Out", "Player In"]
 TRANSACTION_TYPES = ["Promotion/Demotion", "Add/Drop"]
 TEAM_COLOR_PALETTE = [
     "#d98f8f",
@@ -107,7 +107,6 @@ def build_scores() -> pd.DataFrame:
     return df
 
 
-@st.cache_data
 def load_teams(path: str = "teams.csv") -> dict[str, dict[str, object]]:
     if not os.path.exists(path):
         st.error(f"Team file '{path}' not found.")
@@ -169,6 +168,50 @@ def build_player_team_map(teams: dict[str, dict[str, object]]) -> dict[str, str]
             for player in team_data[role]:
                 player_teams[player] = team_name
     return player_teams
+
+
+def apply_transaction_ownership(
+    player_teams: dict[str, str],
+    transactions_df: pd.DataFrame,
+) -> dict[str, str]:
+    updated_player_teams = dict(player_teams)
+    roster_players = set(player_teams)
+    if transactions_df.empty:
+        return updated_player_teams
+
+    df = transactions_df.copy()
+    if "Date" in df.columns:
+        parsed_dates = pd.to_datetime(df["Date"], errors="coerce")
+    else:
+        parsed_dates = pd.Series(pd.NaT, index=df.index)
+    df["_Date Sort"] = parsed_dates.fillna(pd.Timestamp.min)
+    df = df.sort_values(["_Date Sort", "Team"], kind="stable")
+
+    for _, row in df.iterrows():
+        team = str(row.get("Team", "")).strip()
+        transaction_type = str(row.get("Type", "")).strip()
+        player_out = fix_encoding(str(row.get("Player Out", "")).strip())
+        player_in = fix_encoding(str(row.get("Player In", "")).strip())
+
+        if not team:
+            continue
+
+        if transaction_type == "Add/Drop":
+            if player_out not in roster_players and player_in not in roster_players:
+                continue
+            if player_out and updated_player_teams.get(player_out) == team:
+                del updated_player_teams[player_out]
+            if player_in:
+                updated_player_teams[player_in] = team
+        elif transaction_type == "Promotion/Demotion":
+            if player_out not in roster_players and player_in not in roster_players:
+                continue
+            if player_out:
+                updated_player_teams[player_out] = team
+            if player_in:
+                updated_player_teams[player_in] = team
+
+    return updated_player_teams
 
 
 def build_team_color_map(teams: dict[str, dict[str, object]]) -> dict[str, str]:
@@ -332,8 +375,6 @@ def load_transactions() -> pd.DataFrame:
 
         if "Team" not in df.columns and "Owner 1" in df.columns:
             df["Team"] = df["Owner 1"]
-        if "Description" not in df.columns:
-            df["Description"] = ""
         for column in TRANSACTION_COLUMNS:
             if column not in df.columns:
                 df[column] = ""
@@ -458,7 +499,6 @@ def log_transaction(
     transaction_type: str,
     player_out: str,
     player_in: str,
-    description: str,
 ) -> pd.DataFrame:
     row = {
         "Date": date.today().isoformat(),
@@ -467,9 +507,24 @@ def log_transaction(
         "Type": transaction_type,
         "Player Out": player_out,
         "Player In": player_in,
-        "Description": description,
     }
     return pd.concat([transactions_df, pd.DataFrame([row])], ignore_index=True)
+
+
+def transaction_summary(row: pd.Series) -> str:
+    transaction_type = str(row.get("Type", "")).strip()
+    player_out = str(row.get("Player Out", "")).strip()
+    player_in = str(row.get("Player In", "")).strip()
+
+    if transaction_type == "Promotion/Demotion":
+        if player_in and player_out:
+            return f"Promoted {player_in} and demoted {player_out}"
+        return "Promotion/Demotion"
+    if transaction_type == "Add/Drop":
+        if player_in and player_out:
+            return f"Added {player_in} and dropped {player_out}"
+        return "Add/Drop"
+    return transaction_type or "transaction"
 
 
 def swap_starter_and_reserve(team_name: str, starter: str, reserve: str) -> None:
@@ -538,9 +593,9 @@ st.title("WAR League Scorebook")
 scores_df = build_scores()
 war_map = player_war_map(scores_df)
 teams = load_teams()
-player_teams = build_player_team_map(teams)
-team_colors = build_team_color_map(teams)
 transactions_df = load_transactions()
+player_teams = apply_transaction_ownership(build_player_team_map(teams), transactions_df)
+team_colors = build_team_color_map(teams)
 adjustments = transaction_adjustments(transactions_df)
 unmatched_players = unmatched_roster_players(teams, war_map)
 
@@ -617,7 +672,7 @@ with transactions_tab:
             last_move = weekly_transactions.iloc[-1]
             st.warning(
                 f"{selected_team} has already used its transaction for {week_key}: "
-                f"{last_move['Description']}"
+                f"{transaction_summary(last_move)}"
             )
         else:
             st.success(f"{selected_team} has a transaction available for {week_key}.")
@@ -664,7 +719,6 @@ with transactions_tab:
                         "Promotion/Demotion",
                         starter,
                         reserve,
-                        description,
                     )
                     save_transactions(updated_transactions)
                     st.cache_data.clear()
@@ -708,7 +762,6 @@ with transactions_tab:
                         "Add/Drop",
                         dropped_player,
                         added_player,
-                        description,
                     )
                     save_transactions(updated_transactions)
                     st.cache_data.clear()
