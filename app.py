@@ -315,7 +315,7 @@ def team_summary(
         "Reserve WAR": round(reserve_total, 1),
         "Roster WAR": round(roster_total, 1),
         "Adjustment": 0.0,
-        "Total WAR": round(roster_total, 1),
+        "Standings WAR": round(starter_total, 1),
         "Starter Rows": starter_rows,
         "Reserve Rows": reserve_rows,
     }
@@ -332,17 +332,17 @@ def build_team_summary_df(
             "Starter WAR": summary["Starter WAR"],
             "Reserve WAR": summary["Reserve WAR"],
             "Roster WAR": summary["Roster WAR"],
-            "Total WAR": summary["Total WAR"],
+            "Standings WAR": summary["Standings WAR"],
         }
         for team_name, team_data in teams.items()
         for summary in [team_summary(team_name, team_data, war_map, adjustments)]
     ]
     df = pd.DataFrame(
         rows,
-        columns=["Team", "Starter WAR", "Reserve WAR", "Roster WAR", "Total WAR"],
+        columns=["Team", "Starter WAR", "Reserve WAR", "Roster WAR", "Standings WAR"],
     )
     if not df.empty:
-        df = df.sort_values("Total WAR", ascending=False, ignore_index=True)
+        df = df.sort_values("Standings WAR", ascending=False, ignore_index=True)
     df.index = df.index + 1
     return df
 
@@ -360,7 +360,7 @@ def render_team(
     st.write("Reserve roster")
     show_dataframe(pd.DataFrame(summary["Reserve Rows"]))
     st.markdown(
-        f"Starter WAR: {summary['Starter WAR']}   |   Reserve WAR: {summary['Reserve WAR']}   |   Total WAR: {summary['Total WAR']}"
+        f"Starter WAR: {summary['Starter WAR']}   |   Reserve WAR: {summary['Reserve WAR']}   |   Standings WAR: {summary['Standings WAR']}"
     )
 
 
@@ -582,7 +582,7 @@ def render_summary_metrics(summary_df: pd.DataFrame, unmatched_count: int) -> No
     cols = st.columns(5)
     cols[0].metric("Leader", leader["Team"] if leader is not None else "None")
     cols[1].metric("Starter WAR", f"{leader['Starter WAR']:.1f}" if leader is not None else "0.0")
-    cols[2].metric("League WAR", f"{summary_df['Total WAR'].sum():.1f}" if not summary_df.empty else "0.0")
+    cols[2].metric("League Starter WAR", f"{summary_df['Standings WAR'].sum():.1f}" if not summary_df.empty else "0.0")
     cols[3].metric("Unmatched", unmatched_count)
     cols[4].metric("Last Update", last_update_date())
 
@@ -603,6 +603,7 @@ team_tab, leaderboard_tab, transactions_tab = st.tabs(["Fantasy Teams", "Leaderb
 
 with team_tab:
     st.subheader("Fantasy team standings")
+    st.caption("Standings are determined by each team's five starters.")
     summary_df = build_team_summary_df(teams, war_map, adjustments)
     render_summary_metrics(summary_df, len(unmatched_players))
 
@@ -636,7 +637,7 @@ with leaderboard_tab:
 
 with transactions_tab:
     st.subheader("Transaction Log")
-    st.caption("Each team can make one transaction per ISO week. Transactions update the roster file immediately.")
+    st.caption("Transactions are closed for the remainder of the season. The completed transaction history remains below.")
     transaction_issues = transaction_data_issues(transactions_df, teams)
     if transaction_issues:
         with st.expander("Transaction log issues", expanded=True):
@@ -656,114 +657,4 @@ with transactions_tab:
     else:
         st.info("No transactions logged yet")
 
-    st.divider()
-    st.subheader("Make a Transaction")
-
-    if not teams:
-        st.warning("No teams are available.")
-    else:
-        week_key = current_week_key()
-        selected_team = st.selectbox("Team", options=list(teams.keys()), key="transaction_team")
-        selected_team_data = teams[selected_team]
-        weekly_transactions = transactions_this_week(transactions_df, selected_team, week_key)
-        transaction_used = not weekly_transactions.empty
-
-        if transaction_used:
-            last_move = weekly_transactions.iloc[-1]
-            st.warning(
-                f"{selected_team} has already used its transaction for {week_key}: "
-                f"{transaction_summary(last_move)}"
-            )
-        else:
-            st.success(f"{selected_team} has a transaction available for {week_key}.")
-
-        transaction_type = st.radio(
-            "Transaction type",
-            options=TRANSACTION_TYPES,
-            horizontal=True,
-            key="transaction_type",
-        )
-
-        if transaction_type == "Promotion/Demotion":
-            starters = list(selected_team_data["starters"])
-            reserves = list(selected_team_data["reserves"])
-            if not starters or not reserves:
-                st.info("This team needs at least one starter and one reserve to swap players.")
-            else:
-                with st.form("promotion_demotion_form"):
-                    starter = st.selectbox(
-                        "Demote starter",
-                        options=starters,
-                        format_func=lambda player: format_player_option(player, war_map),
-                    )
-                    reserve = st.selectbox(
-                        "Promote reserve",
-                        options=reserves,
-                        format_func=lambda player: format_player_option(player, war_map),
-                    )
-                    submitted = st.form_submit_button("Submit Promotion/Demotion", disabled=transaction_used)
-
-                if submitted:
-                    latest_transactions = load_transactions()
-                    if not transactions_this_week(latest_transactions, selected_team, week_key).empty:
-                        st.error(f"{selected_team} has already used its transaction for {week_key}.")
-                        st.stop()
-                    description = (
-                        f"Promoted {reserve} ({lookup_player_war(reserve, war_map):.1f} WAR) "
-                        f"and demoted {starter} ({lookup_player_war(starter, war_map):.1f} WAR)"
-                    )
-                    swap_starter_and_reserve(selected_team, starter, reserve)
-                    updated_transactions = log_transaction(
-                        latest_transactions,
-                        selected_team,
-                        "Promotion/Demotion",
-                        starter,
-                        reserve,
-                    )
-                    save_transactions(updated_transactions)
-                    st.cache_data.clear()
-                    st.success(description)
-                    st.rerun()
-
-        if transaction_type == "Add/Drop":
-            reserves = list(selected_team_data["reserves"])
-            free_agents = free_agent_options(scores_df, player_teams)
-            if not reserves:
-                st.info("This team has no reserve player available to drop.")
-            elif not free_agents:
-                st.info("No eligible free agents are available from the leaderboard.")
-            else:
-                with st.form("add_drop_form"):
-                    dropped_player = st.selectbox(
-                        "Drop reserve",
-                        options=reserves,
-                        format_func=lambda player: format_player_option(player, war_map),
-                    )
-                    added_player = st.selectbox(
-                        "Add free agent",
-                        options=free_agents,
-                        format_func=lambda player: format_player_option(player, war_map),
-                    )
-                    submitted = st.form_submit_button("Submit Add/Drop", disabled=transaction_used)
-
-                if submitted:
-                    latest_transactions = load_transactions()
-                    if not transactions_this_week(latest_transactions, selected_team, week_key).empty:
-                        st.error(f"{selected_team} has already used its transaction for {week_key}.")
-                        st.stop()
-                    description = (
-                        f"Added {added_player} ({lookup_player_war(added_player, war_map):.1f} WAR) "
-                        f"and dropped {dropped_player} ({lookup_player_war(dropped_player, war_map):.1f} WAR)"
-                    )
-                    replace_reserve(selected_team, dropped_player, added_player)
-                    updated_transactions = log_transaction(
-                        latest_transactions,
-                        selected_team,
-                        "Add/Drop",
-                        dropped_player,
-                        added_player,
-                    )
-                    save_transactions(updated_transactions)
-                    st.cache_data.clear()
-                    st.success(description)
-                    st.rerun()
+    st.info("Transactions are closed for the remainder of the season.")
