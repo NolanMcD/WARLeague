@@ -154,6 +154,23 @@ def lookup_player_war(name: str, war_map: dict[str, float]) -> float:
     return round(war_map.get(name, 0.0), 1)
 
 
+def select_best_lineups(
+    teams: dict[str, dict[str, object]],
+    war_map: dict[str, float],
+) -> dict[str, dict[str, object]]:
+    optimized = {}
+    for team_name, team_data in teams.items():
+        # Stable sorting keeps an existing starter ahead of a reserve on ties.
+        players = list(team_data["starters"]) + list(team_data["reserves"])
+        ranked = sorted(players, key=lambda player: lookup_player_war(player, war_map), reverse=True)
+        optimized[team_name] = {
+            **team_data,
+            "starters": ranked[:5],
+            "reserves": ranked[5:],
+        }
+    return optimized
+
+
 def team_player_rows(player_names: list[str], war_map: dict[str, float]) -> list[dict[str, object]]:
     return [
         {"Player": name, "WAR": lookup_player_war(name, war_map)}
@@ -592,7 +609,7 @@ st.title("WAR League Scorebook")
 
 scores_df = build_scores()
 war_map = player_war_map(scores_df)
-teams = load_teams()
+teams = select_best_lineups(load_teams(), war_map)
 transactions_df = load_transactions()
 player_teams = apply_transaction_ownership(build_player_team_map(teams), transactions_df)
 team_colors = build_team_color_map(teams)
@@ -603,7 +620,7 @@ team_tab, leaderboard_tab, transactions_tab = st.tabs(["Fantasy Teams", "Leaderb
 
 with team_tab:
     st.subheader("Fantasy team standings")
-    st.caption("Standings are determined by each team's five starters.")
+    st.caption("Each team's five highest-WAR players automatically start. Standings and the winner are determined by their combined WAR; the remaining players are reserves.")
     summary_df = build_team_summary_df(teams, war_map, adjustments)
     render_summary_metrics(summary_df, len(unmatched_players))
 
