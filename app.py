@@ -93,8 +93,8 @@ def round_dict_values(d: dict[str, float], ndigits: int = 1) -> dict[str, float]
     return {k: round(v, ndigits) for k, v in d.items()}
 
 
-@st.cache_data
 def build_scores() -> pd.DataFrame:
+    # Read the small local exports on each rerun so data-only updates take effect.
     b = load_bwar("bWAR.txt")
     f = load_fwar("fwar2.txt")
     combined = add_dicts(b, f)
